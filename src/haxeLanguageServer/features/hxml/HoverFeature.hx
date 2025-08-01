@@ -24,39 +24,40 @@ class HoverFeature {
 		}
 		final pos = params.position;
 		final line = doc.lineAt(pos.line);
-		final hxmlContext = analyzeHxmlContext(line, pos);
-		function makeHover(sections:Array<String>):Hover {
-			return {
-				contents: {
-					kind: MarkDown,
-					value: sections.join("\n\n---\n")
-				},
-				range: hxmlContext.range
+		analyzeHxmlContext(line, pos).then(function(hxmlContext) {
+			function makeHover(sections:Array<String>):Hover {
+				return {
+					contents: {
+						kind: MarkDown,
+						value: sections.join("\n\n---\n")
+					},
+					range: hxmlContext.range
+				}
 			}
-		}
-		resolve(switch hxmlContext.element {
-			case Flag(flag) if (flag != null):
-				var signature = flag.name;
-				if (flag.argument != null) {
-					signature += " " + flag.argument.name;
-				}
-				makeHover([printCodeBlock(signature, Hxml), flag.description]);
+			resolve(switch hxmlContext.element {
+				case Flag(flag) if (flag != null):
+					var signature = flag.name;
+					if (flag.argument != null) {
+						signature += " " + flag.argument.name;
+					}
+					makeHover([printCodeBlock(signature, Hxml), flag.description]);
 
-			case EnumValue(value, _) if (value != null):
-				final sections = [printCodeBlock(value.name, Hxml)];
-				if (value.description != null) {
-					sections.push(value.description);
-				}
-				makeHover(sections);
+				case EnumValue(value, _) if (value != null):
+					final sections = [printCodeBlock(value.name, Hxml)];
+					if (value.description != null) {
+						sections.push(value.description);
+					}
+					makeHover(sections);
 
-			case Define(define) if (define != null):
-				makeHover([
-					printCodeBlock(define.getRealName(), Hxml),
-					define.printDetails(context.haxeServer.haxeVersion)
-				]);
+				case Define(define) if (define != null):
+					makeHover([
+						printCodeBlock(define.getRealName(), Hxml),
+						define.printDetails(context.haxeServer.haxeVersion)
+					]);
 
-			case DefineValue(define, value): null;
-			case _: null;
-		});
+				case DefineValue(define, value): null;
+				case _: null;
+			});
+		}).catchError((e) -> reject(e));
 	}
 }

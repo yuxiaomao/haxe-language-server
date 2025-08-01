@@ -3,6 +3,7 @@ package haxeLanguageServer.features.hxml.data;
 import haxeLanguageServer.features.hxml.data.Shared;
 import haxeLanguageServer.helper.SemVer;
 import haxeLanguageServer.protocol.DisplayPrinter;
+import js.lib.Promise;
 
 abstract Define(DefineData) from DefineData {
 	public function printDetails(haxeVersion:SemVer):String {
@@ -153,9 +154,10 @@ private final DefineEnums:Map<String, EnumValues> = [
 	]
 ];
 
-function getDefines(includeReserved:Bool):ReadOnlyArray<Define> {
+function getDefines(includeReserved:Bool):Promise<ReadOnlyArray<Define>> {
 	final allDefines = Defines.concat(RemovedDefines.copy());
-	return if (includeReserved) allDefines else allDefines.filter(define -> define.reserved != true);
+	var result = if (includeReserved) allDefines else allDefines.filter(define -> define.reserved != true);
+	return Promise.resolve(result);
 }
 
 private final RemovedDefines:ReadOnlyArray<DefineData> = [

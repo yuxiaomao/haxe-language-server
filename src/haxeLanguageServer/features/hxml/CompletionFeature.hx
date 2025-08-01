@@ -32,7 +32,6 @@ class CompletionFeature {
 		final line = doc.lineAt(pos.line);
 		final textBefore = line.substr(0, pos.character);
 		final textAfter = line.substr(pos.character);
-		final hxmlContext = analyzeHxmlContext(textBefore, pos);
 
 		function resolveItems(items) {
 			resolve({
@@ -40,23 +39,25 @@ class CompletionFeature {
 				items: items
 			});
 		}
-		final range = hxmlContext.range;
-		switch hxmlContext.element {
-			case Flag(_):
-				resolveItems(createFlagCompletion(range, textAfter));
-			case EnumValue(_, values):
-				resolveItems(createEnumValueCompletion(range, values));
-			case Define():
-				resolveItems(createDefineCompletion(range));
-			case File(path):
-				resolveItems(createFilePathCompletion(range, path, true));
-			case Directory(path):
-				resolveItems(createFilePathCompletion(range, path, false));
-			case LibraryName(_):
-				createLibraryNameCompletion(range, resolve, reject);
-			case DefineValue(_) | Unknown:
-				[];
-		}
+		analyzeHxmlContext(textBefore, pos).then(function(hxmlContext) {
+			final range = hxmlContext.range;
+			switch hxmlContext.element {
+				case Flag(_):
+					resolveItems(createFlagCompletion(range, textAfter));
+				case EnumValue(_, values):
+					resolveItems(createEnumValueCompletion(range, values));
+				case Define():
+					createDefineCompletion(range, resolve, reject);
+				case File(path):
+					resolveItems(createFilePathCompletion(range, path, true));
+				case Directory(path):
+					resolveItems(createFilePathCompletion(range, path, false));
+				case LibraryName(_):
+					createLibraryNameCompletion(range, resolve, reject);
+				case DefineValue(_) | Unknown:
+					resolveItems([]);
+			}
+		});
 	}
 
 	function createFlagCompletion(range:Range, textAfter:String):Array<CompletionItem> {
@@ -122,32 +123,38 @@ class CompletionFeature {
 		return items;
 	}
 
-	function createDefineCompletion(range:Range):Array<CompletionItem> {
+	function createDefineCompletion(range:Range, resolve:CompletionList->Void, reject:ResponseError<NoData>->Void) {
 		final haxeVersion = context.haxeServer.haxeVersion;
-		return getDefines(false).map(define -> {
-			final name = define.getRealName();
-			final textEdit:TextEdit = {
-				range: range,
-				newText: name
-			};
-			final item:CompletionItem = {
-				label: name,
-				kind: Constant,
-				textEdit: textEdit,
-				documentation: {
-					kind: MarkDown,
-					value: define.printDetails(haxeVersion)
+		getDefines(false).then(function(defines) {
+			var items = defines.map(define -> {
+				final name = define.getRealName();
+				final textEdit:TextEdit = {
+					range: range,
+					newText: name
+				};
+				final item:CompletionItem = {
+					label: name,
+					kind: Constant,
+					textEdit: textEdit,
+					documentation: {
+						kind: MarkDown,
+						value: define.printDetails(haxeVersion)
+					}
 				}
-			}
-			if (define.hasParams()) {
-				textEdit.newText += "=";
-				item.command = TriggerSuggest;
-			}
-			if (!define.isAvailable(haxeVersion)) {
-				item.tags = [Deprecated];
-			}
-			return item;
-		});
+				if (define.hasParams()) {
+					textEdit.newText += "=";
+					item.command = TriggerSuggest;
+				}
+				if (!define.isAvailable(haxeVersion)) {
+					item.tags = [Deprecated];
+				}
+				return item;
+			});
+			resolve({
+				isIncomplete: false,
+				items: items
+			});
+		}).catchError((e) -> reject(e));
 	}
 
 	final IgnoredFiles:ReadOnlyArray<String> = ["haxe_libraries", "node_modules", "dump"];
